@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Tone, VoiceName, EmotionVector, PitchPoint } from "../types";
 import { TONES } from "../constants";
 
@@ -59,24 +59,18 @@ function getEmotionDescription(emotion: EmotionVector): string {
   return description;
 }
 
-export const generateSpeech = async (
-  text: string, 
-  voice: VoiceName, 
-  emotion: EmotionVector,
-  audioContext: AudioContext
-): Promise<AudioBuffer> => {
-  let promptText = text;
-  if (Math.abs(emotion.valence) > 0.05 || Math.abs(emotion.arousal) > 0.05) {
-     const mood = getEmotionDescription(emotion);
-     promptText = `Say in a ${mood} tone: ${text}`;
-  }
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
+async function generateAudioFromModel(
+    model: string,
+    promptText: string,
+    voice: string,
+    audioContext: AudioContext
+): Promise<AudioBuffer> {
+     // Using array format for contents to be strictly compliant
+     const response = await ai.models.generateContent({
+      model: model,
       contents: [{ parts: [{ text: promptText }] }],
       config: {
-        responseModalities: [Modality.AUDIO],
+        responseModalities: ['AUDIO' as any], // Use string literal to avoid ESM enum issues
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: voice },
@@ -99,13 +93,49 @@ export const generateSpeech = async (
     if (audioContext.state === 'suspended') await audioContext.resume();
 
     return await decodeAudioData(audioBytes, audioContext);
-  } catch (error: any) {
-    console.error("Gemini TTS Error:", error);
-    if (error.message && error.message.includes("500")) {
-        throw new Error("Gemini Service Error (500). The service might be temporarily unavailable or the request parameters are invalid.");
-    }
-    throw error;
+}
+
+export const generateSpeech = async (
+  text: string, 
+  voice: VoiceName, 
+  emotion: EmotionVector,
+  audioContext: AudioContext
+): Promise<AudioBuffer> => {
+  let promptText = text;
+  if (Math.abs(emotion.valence) > 0.05 || Math.abs(emotion.arousal) > 0.05) {
+     const mood = getEmotionDescription(emotion);
+     promptText = `Say in a ${mood} tone: ${text}`;
   }
+
+  const model = "gemini-2.5-flash-preview-tts";
+  let lastError;
+
+  // Retry logic for 500/503 errors
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await generateAudioFromModel(model, promptText, voice, audioContext);
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`Attempt ${attempt} failed for model ${model}:`, error);
+      
+      // If error is not a server error (5xx), do not retry (e.g. 400 Bad Request)
+      // We check for "500" or "503" in the message or status
+      const isServerError = error.message && (error.message.includes("500") || error.message.includes("503") || error.status === 500 || error.status === 503);
+      
+      if (!isServerError) {
+         throw error;
+      }
+      
+      // Wait before retry (exponential backoff: 500ms, 1000ms)
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 500));
+      }
+    }
+  }
+
+  // If we exhausted retries
+  console.error("Gemini TTS Error after retries:", lastError);
+  throw new Error(`Gemini Service unavailable. ${lastError?.message || "Internal Error"}`);
 };
 
 // Helper: Trim silence from the end of a buffer

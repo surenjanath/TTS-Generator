@@ -66,9 +66,14 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
         smoothedVolumeRef.current += (average - smoothedVolumeRef.current) * 0.1;
         
         // Calculate Dynamic Boost
-        // If volume is low (< 30), boost significantly. If high (> 100), boost less.
-        // Base boost is 1.2x. Max boost is 3x.
-        const dynamicBoost = smoothedVolumeRef.current < 5 ? 0 : Math.max(1.0, Math.min(3.0, 60 / (smoothedVolumeRef.current + 1)));
+        // If volume is low, we want to BOOST it, not mute it.
+        // If average is near 0, boost is high (e.g. 5x). If average is 128, boost is 1x.
+        let dynamicBoost = 1.0;
+        if (smoothedVolumeRef.current > 0.1) {
+             // Target average visible height ~30%
+             // If average is 10, we want to boost by ~3x
+             dynamicBoost = Math.max(1.0, Math.min(5.0, 40 / (smoothedVolumeRef.current + 1)));
+        }
 
         const barWidth = (WIDTH / bufferLength) * 2.5;
         let x = 0;
@@ -80,7 +85,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
           
           // Temporal Smoothing
           const prev = previousDataRef.current![i];
-          // Attack is fast (0.5), decay is slow (0.1)
+          // Attack is fast (0.5), decay is slow (0.15)
           const smoothingFactor = boostedValue > prev ? 0.5 : 0.15; 
           const smoothValue = prev + (boostedValue - prev) * smoothingFactor;
           

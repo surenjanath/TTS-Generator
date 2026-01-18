@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Wand2, Volume2, Loader2, Activity, Waves, BarChart2, Download } from 'lucide-react';
+import { Play, Pause, Wand2, Loader2, Activity, Waves, BarChart2, Download, Zap } from 'lucide-react';
 import { generateSpeech, bufferToWav, renderProcessedAudio } from './services/geminiService';
 import { VoiceName, VisualizationMode, EmotionVector, PitchPoint } from './types';
 import { SAMPLE_TEXT } from './constants';
@@ -118,7 +118,7 @@ function App() {
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `qubitspeak_${voice.toLowerCase()}_${Date.now()}.wav`;
+      a.download = `auralis_${voice.toLowerCase()}_${Date.now()}.wav`;
       document.body.appendChild(a);
       a.click();
       
@@ -303,23 +303,36 @@ function App() {
   const getVisualizerTone = () => "Neutral" as any; 
 
   return (
-    <div className="min-h-screen w-full bg-qubit-900 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] text-white selection:bg-qubit-accent selection:text-black font-sans">
-      <div className="fixed inset-0 bg-grid-pattern bg-[size:50px_50px] opacity-5 pointer-events-none"></div>
+    <div className="min-h-screen w-full bg-qubit-950 text-white selection:bg-qubit-accent selection:text-black font-sans relative overflow-hidden">
+      {/* Ambient Background Elements */}
+      <div className="fixed top-[-20%] left-[-10%] w-[60%] h-[60%] bg-qubit-purple/10 rounded-full blur-[120px] pointer-events-none animate-pulse-slow" />
+      <div className="fixed bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-qubit-accent/10 rounded-full blur-[120px] pointer-events-none" />
       
+      {/* Noise Texture */}
+      <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
+      
+      {/* Grid Pattern */}
+      <div className="fixed inset-0 bg-grid-pattern bg-[size:50px_50px] pointer-events-none"></div>
+
       <div className="max-w-7xl mx-auto px-4 py-8 relative z-10">
-        <header className="flex justify-between items-center mb-12 border-b border-white/10 pb-6">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-gradient-to-br from-qubit-accent to-qubit-purple rounded flex items-center justify-center shadow-lg shadow-qubit-accent/20">
-                <Volume2 className="text-white" size={24} />
+        <header className="flex justify-between items-center mb-12 border-b border-white/5 pb-6">
+          <div className="flex items-center gap-4">
+             {/* Logo */}
+             <div className="w-10 h-10 relative flex items-center justify-center">
+                <svg viewBox="0 0 40 40" className="w-full h-full text-qubit-accent">
+                   <path d="M20 4L4 32H36L20 4Z" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" className="drop-shadow-[0_0_10px_rgba(0,216,255,0.5)]"/>
+                   <path d="M20 12V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-qubit-purple drop-shadow-[0_0_10px_rgba(124,58,237,0.5)]"/>
+                   <circle cx="20" cy="20" r="14" stroke="currentColor" strokeWidth="1" className="opacity-30" strokeDasharray="4 4" />
+                </svg>
              </div>
              <div>
-                <h1 className="text-2xl font-bold tracking-tight">Qubit<span className="text-qubit-accent">Speak</span></h1>
-                <p className="text-xs text-gray-500 font-mono tracking-widest">GEMINI.2.5.FLASH.TTS // BUILD.9821</p>
+                <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-400">Auralis</h1>
+                <p className="text-[10px] text-qubit-accent font-mono tracking-[0.2em] uppercase opacity-80">Generative Synthesis Architecture</p>
              </div>
           </div>
-          <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/10">
-             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-             <span className="text-xs font-mono text-gray-300">SYSTEM_ONLINE</span>
+          <div className="hidden md:flex items-center gap-3 px-4 py-1.5 bg-qubit-800/50 rounded-full border border-white/10 backdrop-blur-md">
+             <Zap size={12} className="text-qubit-accent fill-qubit-accent" />
+             <span className="text-xs font-mono text-gray-300">GEMINI.PRO.2.5 // READY</span>
           </div>
         </header>
 
@@ -327,9 +340,12 @@ function App() {
             {/* Left Column */}
             <div className="lg:col-span-7 space-y-6">
                {/* Input */}
-               <div className="glass-panel p-1 rounded-2xl">
-                 <div className="bg-qubit-900/80 rounded-xl p-4 border border-white/5 min-h-[250px] flex flex-col relative group">
-                    <div className="absolute top-4 right-4 text-xs font-mono text-gray-600 group-hover:text-qubit-accent transition-colors">TXT_INPUT</div>
+               <div className="glass-panel p-1 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.3)]">
+                 <div className="bg-qubit-950/50 rounded-xl p-6 border border-white/5 min-h-[280px] flex flex-col relative group transition-colors hover:bg-qubit-950/70">
+                    <div className="absolute top-4 right-4 text-[10px] font-mono text-gray-700 group-hover:text-qubit-accent transition-colors flex items-center gap-1">
+                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                        TEXT_INPUT_STREAM
+                    </div>
                     <textarea 
                         value={text}
                         onChange={(e) => setText(e.target.value)}
@@ -337,8 +353,8 @@ function App() {
                         className="w-full h-full bg-transparent resize-none border-none focus:ring-0 text-gray-200 text-lg leading-relaxed placeholder:text-gray-700 font-light outline-none flex-grow min-h-[200px]"
                     />
                     <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
-                        <span className="text-xs font-mono text-gray-500">{text.length} CHARS</span>
-                        <button onClick={() => setText('')} className="text-xs text-gray-500 hover:text-white transition-colors uppercase font-mono">Clear</button>
+                        <span className="text-xs font-mono text-gray-600 group-hover:text-gray-400 transition-colors">{text.length} CHARACTERS</span>
+                        <button onClick={() => setText('')} className="text-xs text-gray-600 hover:text-white transition-colors uppercase font-mono tracking-wider">Clear Buffer</button>
                     </div>
                  </div>
                </div>
@@ -349,14 +365,22 @@ function App() {
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
                             <Activity size={16} className="text-qubit-accent" />
-                            <span className="text-sm font-mono font-semibold tracking-wider text-gray-300">VISUALIZATION</span>
+                            <span className="text-xs font-mono font-bold tracking-widest text-gray-400 uppercase">Signal Visualizer</span>
                         </div>
                         <div className="flex bg-qubit-900 rounded-lg p-1 border border-white/10">
-                            <button onClick={() => setVisMode(VisualizationMode.Waveform)} className={`p-1.5 rounded ${visMode === VisualizationMode.Waveform ? 'bg-qubit-700 text-qubit-accent' : 'text-gray-500 hover:text-gray-300'}`}><Waves size={14} /></button>
-                            <button onClick={() => setVisMode(VisualizationMode.Frequency)} className={`p-1.5 rounded ${visMode === VisualizationMode.Frequency ? 'bg-qubit-700 text-qubit-accent' : 'text-gray-500 hover:text-gray-300'}`}><BarChart2 size={14} /></button>
+                            <button onClick={() => setVisMode(VisualizationMode.Waveform)} className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Waveform ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}><Waves size={14} /></button>
+                            <button onClick={() => setVisMode(VisualizationMode.Frequency)} className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Frequency ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}><BarChart2 size={14} /></button>
                         </div>
                       </div>
-                      {isPlaying && <span className="text-xs font-mono text-qubit-accent animate-pulse">PLAYING...</span>}
+                      {isPlaying && (
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-qubit-accent opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-qubit-accent"></span>
+                            </span>
+                            <span className="text-[10px] font-mono text-qubit-accent">LIVE_FEED</span>
+                          </div>
+                      )}
                   </div>
                   
                   <Visualizer analyser={analyserRef.current} isPlaying={isPlaying} mode={visMode} tone={getVisualizerTone()} />
@@ -376,44 +400,44 @@ function App() {
 
             {/* Right Column */}
             <div className="lg:col-span-5 space-y-6">
-                <div className="glass-panel p-6 rounded-2xl border-t border-white/10 bg-gradient-to-b from-white/5 to-transparent">
+                <div className="glass-panel p-1 rounded-2xl bg-gradient-to-b from-white/10 to-transparent">
                     <button
                         onClick={handleGenerate}
                         disabled={isLoading || !text.trim()}
-                        className={`w-full py-4 rounded-xl font-bold tracking-wide flex items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden group ${
+                        className={`w-full py-5 rounded-xl font-bold tracking-wide flex items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden group ${
                             isLoading 
-                            ? 'bg-qubit-800 text-gray-500 cursor-not-allowed border border-white/5' 
-                            : 'bg-white text-black hover:bg-qubit-accent hover:shadow-[0_0_30px_rgba(0,216,255,0.4)] hover:border-qubit-accent'
+                            ? 'bg-qubit-900 text-gray-500 cursor-not-allowed border border-white/5' 
+                            : 'bg-white text-black hover:bg-qubit-accent hover:shadow-[0_0_40px_rgba(0,216,255,0.3)] border border-transparent'
                         }`}
                     >
                         {isLoading ? (
                             <>
                                 <Loader2 className="animate-spin" size={20} />
-                                <span className="font-mono">SYNTHESIZING...</span>
+                                <span className="font-mono text-sm">PROCESSING...</span>
                             </>
                         ) : (
                             <>
-                                <Wand2 size={20} className={text.trim() ? "text-qubit-purple group-hover:text-black" : "text-gray-400"} />
-                                <span>GENERATE SPEECH</span>
+                                <Wand2 size={20} className={text.trim() ? "text-qubit-purple group-hover:text-black transition-colors" : "text-gray-400"} />
+                                <span>INITIALIZE SYNTHESIS</span>
                             </>
                         )}
                     </button>
-                    
-                    {isLoading && (
-                        <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                             <div className="flex justify-between text-[10px] font-mono text-qubit-accent">
-                                 <span className="animate-pulse">PROCESSING_NEURAL_DATA...</span>
-                                 <span>{Math.round(generationProgress)}%</span>
-                             </div>
-                             <div className="h-1 bg-qubit-900 rounded-full overflow-hidden border border-white/5">
-                                 <div className="h-full bg-qubit-accent shadow-[0_0_10px_rgba(0,216,255,0.5)] transition-all duration-300 ease-out relative" style={{ width: `${generationProgress}%` }}>
-                                    <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_5px_white]"></div>
-                                 </div>
-                             </div>
-                        </div>
-                    )}
-                    {error && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-mono rounded">ERROR: {error}</div>}
                 </div>
+                    
+                {isLoading && (
+                    <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300 px-1">
+                            <div className="flex justify-between text-[10px] font-mono text-qubit-accent uppercase tracking-wider">
+                                <span className="animate-pulse">Neural Rendering</span>
+                                <span>{Math.round(generationProgress)}%</span>
+                            </div>
+                            <div className="h-1 bg-qubit-900 rounded-full overflow-hidden border border-white/5">
+                                <div className="h-full bg-qubit-accent shadow-[0_0_10px_rgba(0,216,255,0.5)] transition-all duration-300 ease-out relative" style={{ width: `${generationProgress}%` }}>
+                                <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white shadow-[0_0_5px_white]"></div>
+                                </div>
+                            </div>
+                    </div>
+                )}
+                {error && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono rounded">ERR_CODE_500: {error}</div>}
 
                 <Controls 
                     voice={voice} setVoice={setVoice} 
@@ -423,27 +447,27 @@ function App() {
                 />
                 
                 {/* Playback Controls */}
-                <div className="glass-panel p-4 rounded-xl flex items-center gap-4 border border-white/5">
+                <div className="glass-panel p-5 rounded-2xl flex items-center gap-5 border border-white/5">
                     <button
                         onClick={togglePlayback}
                         disabled={!audioBufferRef.current || isLoading}
-                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                            !audioBufferRef.current ? 'bg-white/5 text-gray-600' : isPlaying ? 'bg-qubit-accent text-black shadow-lg shadow-qubit-accent/30' : 'bg-qubit-700 text-white hover:bg-qubit-600'
+                        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+                            !audioBufferRef.current ? 'bg-white/5 text-gray-600' : isPlaying ? 'bg-qubit-accent text-black shadow-[0_0_20px_rgba(0,216,255,0.4)] scale-105' : 'bg-white text-black hover:bg-qubit-accent hover:scale-105'
                         }`}
                     >
-                        {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
+                        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-1" />}
                     </button>
-                    <div className="flex-1">
-                        <div className="text-xs font-mono text-gray-500 mb-1 flex justify-between">
-                            <span>TIMELINE</span>
-                            <span>{Math.round(progress)}%</span>
+                    <div className="flex-1 space-y-2">
+                        <div className="text-[10px] font-mono text-gray-500 flex justify-between tracking-widest uppercase">
+                            <span>Sequence Timeline</span>
+                            <span className="text-qubit-accent">{Math.round(progress)}%</span>
                         </div>
                         <div 
-                            className={`h-2 bg-gray-800 rounded-full overflow-hidden relative group ${audioBufferRef.current ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                            className={`h-2 bg-qubit-900 rounded-full overflow-hidden relative group border border-white/5 ${audioBufferRef.current ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                             onClick={handleScrub}
                         >
                              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                             <div className="h-full bg-qubit-accent relative transition-all duration-100 ease-out" style={{ width: `${progress}%` }}>
+                             <div className="h-full bg-gradient-to-r from-qubit-purple to-qubit-accent relative transition-all duration-100 ease-out shadow-[0_0_10px_rgba(0,216,255,0.3)]" style={{ width: `${progress}%` }}>
                                 <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"></div>
                              </div>
                         </div>
@@ -451,7 +475,7 @@ function App() {
                     <button 
                         onClick={handleDownload}
                         disabled={!audioBufferRef.current || isLoading || isProcessingDownload}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all ${!audioBufferRef.current ? 'border-white/5 text-gray-700 cursor-not-allowed' : 'border-white/10 text-gray-400 hover:text-qubit-accent hover:border-qubit-accent/50 hover:bg-qubit-accent/10'}`}
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-all ${!audioBufferRef.current ? 'border-white/5 text-gray-700 cursor-not-allowed' : 'border-white/10 text-gray-400 hover:text-qubit-accent hover:border-qubit-accent/50 hover:bg-qubit-accent/10 hover:shadow-[0_0_15px_rgba(0,216,255,0.2)]'}`}
                     >
                          {isProcessingDownload ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                     </button>

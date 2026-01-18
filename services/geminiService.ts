@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { Tone, VoiceName, EmotionVector, PitchPoint } from "../types";
 import { TONES } from "../constants";
 
@@ -76,7 +76,7 @@ export const generateSpeech = async (
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: promptText }] }],
       config: {
-        responseModalities: ["AUDIO"] as any, // Using string literal to avoid Enum issues
+        responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: voice },
@@ -101,9 +101,8 @@ export const generateSpeech = async (
     return await decodeAudioData(audioBytes, audioContext);
   } catch (error: any) {
     console.error("Gemini TTS Error:", error);
-    // Improve error message for 500s
     if (error.message && error.message.includes("500")) {
-        throw new Error("Gemini Service Error (500). Please try again in a moment or simplify the text.");
+        throw new Error("Gemini Service Error (500). The service might be temporarily unavailable or the request parameters are invalid.");
     }
     throw error;
   }
@@ -143,7 +142,6 @@ export async function renderProcessedAudio(
   pitchPoints: PitchPoint[]
 ): Promise<AudioBuffer> {
   // Determine duration based on pitch automation
-  // Lower pitch = Slower speed = Longer duration.
   
   let minPitch = 0;
   if (pitchPoints.length > 0) {
@@ -191,7 +189,6 @@ export async function renderProcessedAudio(
   
   const renderedBuffer = await offlineCtx.startRendering();
   
-  // Trim the excess silence we allocated
   return trimSilence(renderedBuffer);
 }
 

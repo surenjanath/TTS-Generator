@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Google_Gemini_logo.svg/1024px-Google_Gemini_logo.svg.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>QubitSpeak | Generative Audio</title>
+    <title>Auralis | Generative Audio Synthesis</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,6 +19,7 @@
             },
             colors: {
               qubit: {
+                950: '#050508', // Deep void
                 900: '#0B0C15',
                 800: '#13141F',
                 700: '#1C1E2D',
@@ -28,7 +29,10 @@
               }
             },
             backgroundImage: {
-              'grid-pattern': "linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px)",
+              'grid-pattern': "linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)",
+            },
+            animation: {
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             }
           }
         }
@@ -36,35 +40,30 @@
     </script>
     <style>
       body {
-        background-color: #0B0C15;
+        background-color: #050508;
         color: #e2e8f0;
       }
       .glass-panel {
-        background: rgba(19, 20, 31, 0.7);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgba(19, 20, 31, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-      }
-      .neon-glow {
-        box-shadow: 0 0 20px rgba(0, 216, 255, 0.15);
-      }
-      .neon-text {
-        text-shadow: 0 0 10px rgba(0, 216, 255, 0.5);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #0B0C15;
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #2D3748;
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #4A5568;
+        background: rgba(255, 255, 255, 0.2);
       }
     </style>
   <script type="importmap">

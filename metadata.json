@@ -1,5 +1,5 @@
 {
-  "name": "GEMISpeak",
-  "description": "A high-fidelity generative voice synthesizer powered by Gemini 2.5. Features emotional tone control, multi-voice selection, and real-time audio visualization in an AlphaQubit-inspired interface.",
+  "name": "Auralis",
+  "description": "Auralis is a next-generation generative voice synthesizer powered by Gemini 2.5, featuring emotional sculpting and real-time spectral visualization.",
   "requestFramePermissions": []
 }

@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { PitchPoint } from '../types';
 import { Music2, Plus, Trash2, Move } from 'lucide-react';
@@ -38,28 +37,23 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
 
   const handleMouseDown = (e: React.MouseEvent, id?: string) => {
     if (disabled) return;
-    // Important: Stop propagation so a click on a point doesn't trigger the container's "add point" logic
     e.stopPropagation();
-    e.preventDefault(); // Prevent text selection
+    e.preventDefault(); 
     
     if (id) {
-      // Start dragging existing point
       setDraggedPointId(id);
     } else {
-      // Add new point logic (when clicking background)
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const x = toDataX(e.clientX - rect.left, rect.width);
         const y = toDataY(e.clientY - rect.top, rect.height);
         
-        // Use a more robust ID generation
         const newPoint: PitchPoint = {
-          id: `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `pt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           x,
           y
         };
         
-        // Add new point and start dragging it immediately
         setPoints(prev => [...prev, newPoint].sort((a, b) => a.x - b.x));
         setDraggedPointId(newPoint.id);
       }
@@ -72,6 +66,10 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
     const rect = containerRef.current.getBoundingClientRect();
     let x = toDataX(e.clientX - rect.left, rect.width);
     const y = toDataY(e.clientY - rect.top, rect.height);
+
+    // If dragging start/end points, lock X
+    if (draggedPointId === 'start') x = 0;
+    if (draggedPointId === 'end') x = 1;
 
     setPoints((prev) => {
        return prev.map(p => {
@@ -90,6 +88,8 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
   const handleDoubleClick = (e: React.MouseEvent, id: string) => {
      if (disabled) return;
      e.stopPropagation();
+     // Prevent deleting start/end points
+     if (id === 'start' || id === 'end') return;
      setPoints(prev => prev.filter(p => p.id !== id));
   };
 
@@ -104,33 +104,20 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
     };
   }, [draggedPointId]);
 
-  // Generate Path for SVG
   const generatePath = () => {
-    if (points.length === 0) return `M 0 50 L 100 50`; // Flat line at 0
+    if (points.length === 0) return `M 0 50 L 100 50`;
     
     const sorted = [...points].sort((a, b) => a.x - b.x);
-    
-    // SVG coordinate system (0 at top, 100 at bottom)
     const svgY = (y: number) => 100 - toPctY(y);
     
-    // Start Path
-    let d = ``;
-    
-    // If first point is not at x=0, assume flat from 0
-    if (sorted[0].x > 0) {
-        d = `M 0 ${svgY(sorted[0].y)} L ${sorted[0].x * 100} ${svgY(sorted[0].y)}`;
-    } else {
-        d = `M 0 ${svgY(sorted[0].y)}`;
-    }
-
+    let d = `M 0 ${svgY(sorted[0].y)}`;
     sorted.forEach(p => {
         d += ` L ${p.x * 100} ${svgY(p.y)}`;
     });
-
-    // Extend to end
+    // Ensure line reaches right edge if not already
     const last = sorted[sorted.length - 1];
     if (last.x < 1) {
-        d += ` L 100 ${svgY(last.y)}`;
+         d += ` L 100 ${svgY(last.y)}`;
     }
 
     return d;
@@ -151,14 +138,14 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
       </div>
 
       <div 
-         className={`relative w-full h-32 bg-qubit-900/50 rounded-lg border border-white/10 overflow-hidden select-none ${disabled ? 'opacity-50 pointer-events-none' : 'cursor-crosshair'}`}
+         className={`relative w-full h-32 bg-qubit-900/50 rounded-lg border border-white/10 overflow-hidden select-none group ${disabled ? 'opacity-50 pointer-events-none' : 'cursor-crosshair'}`}
          ref={containerRef}
          onMouseDown={(e) => handleMouseDown(e)}
       >
           {/* Grid Lines */}
           <div className="absolute top-1/2 left-0 right-0 h-px bg-qubit-accent/20"></div> {/* 0 semitones */}
-          <div className="absolute top-[10%] left-0 right-0 h-px bg-white/5 border-t border-dashed border-white/5"></div> {/* +10ish */}
-          <div className="absolute bottom-[10%] left-0 right-0 h-px bg-white/5 border-t border-dashed border-white/5"></div> {/* -10ish */}
+          <div className="absolute top-[10%] left-0 right-0 h-px bg-white/5 border-t border-dashed border-white/5"></div>
+          <div className="absolute bottom-[10%] left-0 right-0 h-px bg-white/5 border-t border-dashed border-white/5"></div>
 
           {/* SVG Line */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
@@ -185,7 +172,7 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
                     ? 'bg-white border-qubit-accent scale-150 z-20 cursor-grabbing' 
                     : hoveredPointId === p.id
                         ? 'bg-qubit-accent border-white scale-125 z-10 cursor-grab'
-                        : 'bg-qubit-900 border-qubit-accent z-10 cursor-grab'
+                        : 'bg-qubit-900 border-qubit-accent z-10 cursor-grab hover:scale-125 hover:bg-qubit-accent hover:border-white'
                 }`}
                 style={{
                     left: `${toPctX(p.x)}%`,

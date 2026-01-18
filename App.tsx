@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Wand2, Loader2, Activity, Waves, BarChart2, Download, Zap } from 'lucide-react';
 import { generateSpeech, bufferToWav, renderProcessedAudio } from './services/geminiService';
-import { VoiceName, VisualizationMode, EmotionVector, PitchPoint } from './types';
+import { VoiceName, VisualizationMode, EmotionVector, PitchPoint, AudioEffects } from './types';
+import { createEffectChain, updateEffectParams, EffectNodes } from './services/audioUtils';
 import { SAMPLE_TEXT } from './constants';
 import Controls from './components/Controls';
 import Visualizer from './components/Visualizer';
 import PitchEditor from './components/PitchEditor';
+import EffectsRack from './components/EffectsRack';
 
 function App() {
   const [text, setText] = useState<string>(SAMPLE_TEXT);
@@ -19,6 +21,11 @@ function App() {
       { id: 'start', x: 0, y: 0 }, 
       { id: 'end', x: 1, y: 0 }
   ]);
+  const [effects, setEffects] = useState<AudioEffects>({
+    distortion: 0,
+    delay: 0,
+    reverb: 0
+  });
 
   const [isLoading, setIsLoading] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0); 
@@ -32,6 +39,7 @@ function App() {
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const effectNodesRef = useRef<EffectNodes | null>(null);
   
   // Tracking Refs for Animation Loop
   const progressRef = useRef<number>(0);
@@ -106,11 +114,18 @@ function App() {
     }
   }, [pitchPoints]); 
 
+  // Handle Effects Live Update
+  useEffect(() => {
+      if (effectNodesRef.current) {
+          updateEffectParams(effectNodesRef.current, effects);
+      }
+  }, [effects]);
+
   const handleDownload = async () => {
     if (!audioBufferRef.current) return;
     try {
       setIsProcessingDownload(true);
-      const processedBuffer = await renderProcessedAudio(audioBufferRef.current, speed, pitchPoints);
+      const processedBuffer = await renderProcessedAudio(audioBufferRef.current, speed, pitchPoints, effects);
       
       const wavBlob = bufferToWav(processedBuffer);
       const url = URL.createObjectURL(wavBlob);
@@ -155,48 +170,34 @@ function App() {
   const playAudio = (buffer: AudioBuffer, startPercentage: number) => {
     if (!audioContextRef.current || !analyserRef.current) return;
     
-    // Stop previous
-    if (sourceRef.current) {
-        try { 
-            sourceRef.current.onended = null; // Remove listener to avoid triggering stop logic
-            sourceRef.current.stop(); 
-        } catch (e) {}
-    }
+    // Stop previous audio
+    stopAudio(false);
 
     const source = audioContextRef.current.createBufferSource();
     source.buffer = buffer;
     source.playbackRate.value = speed;
     
+    // Build Effect Graph
+    const fxChain = createEffectChain(audioContextRef.current);
+    effectNodesRef.current = fxChain;
+    
+    // Set initial Effect params
+    updateEffectParams(fxChain, effects);
+
     const now = audioContextRef.current.currentTime;
     
     // Calculate start offset in seconds based on percentage
     const offset = (startPercentage / 100) * buffer.duration;
     
     // Map points to automation
-    // We assume the automation timeline maps to the BASE duration (original / speed).
     const nominalDuration = buffer.duration / speed;
-    
-    // Automation Logic
     const sorted = [...pitchPoints].sort((a, b) => a.x - b.x);
     
-    // 1. Set Initial Pitch at Playhead
-    // We need to know where we are in normalized time [0-1] to get current pitch
-    // offset is in buffer seconds.
     const normalizedPos = startPercentage / 100;
     const initialPitch = getPitchAt(normalizedPos);
     source.detune.setValueAtTime(initialPitch * 100, now);
     
-    // 2. Schedule Future Ramps
-    // We only schedule ramps that occur AFTER the current playback position.
-    // The "time" for automation is relative to when the track started playing (0).
-    // But we are starting at `offset` (buffer time) -> `offset/speed` (real time relative to start).
-    // So we need to shift the automation curve so it lines up.
-    // The automation time T is usually `p.x * nominalDuration`.
-    // We are starting playback at `startRealTime = (normalizedPos * nominalDuration)`.
-    // So for a point at `T_point`, we schedule it at `now + (T_point - startRealTime)`.
-    
     const startRealTime = normalizedPos * nominalDuration;
-    
     sorted.forEach(p => {
         const pointTime = p.x * nominalDuration;
         if (pointTime > startRealTime) {
@@ -205,7 +206,9 @@ function App() {
         }
     });
 
-    source.connect(analyserRef.current);
+    // Routing: Source -> FX Input -> FX Output -> Analyser -> Dest
+    source.connect(fxChain.input);
+    fxChain.output.connect(analyserRef.current);
     analyserRef.current.connect(audioContextRef.current.destination);
     
     // Setup cleanup
@@ -234,15 +237,10 @@ function App() {
       const dt = currentTime - lastTimeRef.current;
       lastTimeRef.current = currentTime;
       
-      // Calculate instantaneous speed
-      // Base speed * pitch factor
       const currentPitch = getPitchAt(progressRef.current / 100);
       const pitchFactor = Math.pow(2, currentPitch / 12);
       const instantaneousSpeed = speed * pitchFactor;
       
-      // Calculate how much buffer % we consumed
-      // % = (seconds consumed / total seconds) * 100
-      // seconds consumed = dt * instantaneousSpeed
       const percentConsumed = (dt * instantaneousSpeed / buffer.duration) * 100;
       
       progressRef.current = Math.min(100, progressRef.current + percentConsumed);
@@ -261,8 +259,18 @@ function App() {
       try { 
           sourceRef.current.onended = null;
           sourceRef.current.stop(); 
+          sourceRef.current.disconnect();
       } catch (e) {}
       sourceRef.current = null;
+    }
+    
+    // Disconnect effects to clean up graph
+    if (effectNodesRef.current) {
+        try {
+            effectNodesRef.current.input.disconnect();
+            effectNodesRef.current.output.disconnect();
+        } catch(e) {}
+        effectNodesRef.current = null;
     }
     
     cancelAnimationFrame(animationFrameRef.current);
@@ -332,7 +340,7 @@ function App() {
           </div>
           <div className="hidden md:flex items-center gap-3 px-4 py-1.5 bg-qubit-800/50 rounded-full border border-white/10 backdrop-blur-md">
              <Zap size={12} className="text-qubit-accent fill-qubit-accent" />
-             <span className="text-xs font-mono text-gray-300">GEMINI.PRO.2.5 // READY</span>
+             <span className="text-xs font-mono text-gray-300">GEMINI 2.5 TTS</span>
           </div>
         </header>
 
@@ -341,7 +349,7 @@ function App() {
             <div className="lg:col-span-7 space-y-6">
                {/* Input */}
                <div className="glass-panel p-1 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.3)]">
-                 <div className="bg-qubit-950/50 rounded-xl p-6 border border-white/5 min-h-[280px] flex flex-col relative group transition-colors hover:bg-qubit-950/70">
+                 <div className="bg-qubit-950/50 rounded-xl p-6 border border-white/5 min-h-[200px] flex flex-col relative group transition-colors hover:bg-qubit-950/70">
                     <div className="absolute top-4 right-4 text-[10px] font-mono text-gray-700 group-hover:text-qubit-accent transition-colors flex items-center gap-1">
                         <span className="w-1 h-1 bg-current rounded-full"></span>
                         TEXT_INPUT_STREAM
@@ -350,7 +358,7 @@ function App() {
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         placeholder="Enter text to synthesize..."
-                        className="w-full h-full bg-transparent resize-none border-none focus:ring-0 text-gray-200 text-lg leading-relaxed placeholder:text-gray-700 font-light outline-none flex-grow min-h-[200px]"
+                        className="w-full h-full bg-transparent resize-none border-none focus:ring-0 text-gray-200 text-lg leading-relaxed placeholder:text-gray-700 font-light outline-none flex-grow min-h-[140px]"
                     />
                     <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
                         <span className="text-xs font-mono text-gray-600 group-hover:text-gray-400 transition-colors">{text.length} CHARACTERS</span>
@@ -430,7 +438,7 @@ function App() {
                         ) : (
                             <>
                                 <Wand2 size={20} className={text.trim() ? "text-qubit-purple group-hover:text-black transition-colors" : "text-gray-400"} />
-                                <span>INITIALIZE SYNTHESIS</span>
+                                <span>INITIALIZE AUDIO SYNTHESIS</span>
                             </>
                         )}
                     </button>
@@ -455,6 +463,12 @@ function App() {
                     voice={voice} setVoice={setVoice} 
                     emotion={emotion} setEmotion={setEmotion}
                     speed={speed} setSpeed={setSpeed}
+                    disabled={isLoading}
+                />
+
+                <EffectsRack 
+                    effects={effects}
+                    setEffects={setEffects}
                     disabled={isLoading}
                 />
                 

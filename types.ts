@@ -1,4 +1,5 @@
 
+
 export enum VoiceName {
   Puck = 'Puck',
   Charon = 'Charon',
@@ -15,6 +16,11 @@ export enum Tone {
   Dramatic = 'Dramatic',
   Whisper = 'Whisper',
   Robotic = 'Robotic'
+}
+
+export enum VideoAspectRatio {
+  Landscape = 'Landscape',
+  Portrait = 'Portrait'
 }
 
 export interface EmotionVector {
@@ -56,4 +62,10 @@ export interface PitchPoint {
   id: string;
   x: number; // 0 to 1 (Time normalized)
   y: number; // -12 to 12 (Semitones)
+}
+
+export interface AudioEffects {
+  reverb: number;     // 0.0 to 1.0 (Mix)
+  delay: number;      // 0.0 to 1.0 (Feedback/Mix)
+  distortion: number; // 0.0 to 1.0 (Drive)
 }

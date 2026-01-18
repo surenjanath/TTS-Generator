@@ -1,6 +1,8 @@
+
 import { GoogleGenAI } from "@google/genai";
-import { Tone, VoiceName, EmotionVector, PitchPoint } from "../types";
+import { Tone, VoiceName, EmotionVector, PitchPoint, AudioEffects, VideoAspectRatio } from "../types";
 import { TONES } from "../constants";
+import { makeDistortionCurve, createImpulseResponse } from "./audioUtils";
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -169,7 +171,8 @@ function trimSilence(buffer: AudioBuffer): AudioBuffer {
 export async function renderProcessedAudio(
   originalBuffer: AudioBuffer,
   speed: number,
-  pitchPoints: PitchPoint[]
+  pitchPoints: PitchPoint[],
+  effects: AudioEffects
 ): Promise<AudioBuffer> {
   // Determine duration based on pitch automation
   
@@ -185,8 +188,9 @@ export async function renderProcessedAudio(
   // Calculate worst-case duration
   const estimatedMaxDuration = originalBuffer.duration / minEffectiveSpeed;
   
-  // Add safety buffer (1.5 seconds)
-  const renderLength = Math.ceil(estimatedMaxDuration * originalBuffer.sampleRate) + (originalBuffer.sampleRate * 1.5);
+  // Add large buffer for reverb tails (e.g. 4 seconds)
+  const tailDuration = effects.reverb > 0 || effects.delay > 0 ? 4.0 : 1.5;
+  const renderLength = Math.ceil(estimatedMaxDuration * originalBuffer.sampleRate) + (originalBuffer.sampleRate * tailDuration);
   
   const offlineCtx = new OfflineAudioContext(
     originalBuffer.numberOfChannels,
@@ -194,11 +198,11 @@ export async function renderProcessedAudio(
     originalBuffer.sampleRate
   );
 
+  // 1. Create Source with Pitch/Speed Automation
   const source = offlineCtx.createBufferSource();
   source.buffer = originalBuffer;
   source.playbackRate.value = speed;
   
-  // Apply Automation
   if (pitchPoints.length > 0) {
       const sorted = [...pitchPoints].sort((a, b) => a.x - b.x);
       const nominalDuration = originalBuffer.duration / speed;
@@ -213,8 +217,57 @@ export async function renderProcessedAudio(
   } else {
       source.detune.value = 0;
   }
+
+  // 2. Build FX Chain (Manual reconstruction for offline context since nodes aren't transferable)
+  // Input
+  let lastNode: AudioNode = source;
   
-  source.connect(offlineCtx.destination);
+  // A. Distortion
+  if (effects.distortion > 0.01) {
+      const dist = offlineCtx.createWaveShaper();
+      dist.curve = makeDistortionCurve(effects.distortion * 400);
+      dist.oversample = '4x';
+      lastNode.connect(dist);
+      lastNode = dist;
+  }
+
+  // B. Parallel Processing for Time-based FX
+  // We need a merge node before destination
+  const masterBus = offlineCtx.createGain();
+  
+  // Dry Path
+  lastNode.connect(masterBus);
+
+  // Delay Path
+  if (effects.delay > 0.01) {
+      const dNode = offlineCtx.createDelay();
+      dNode.delayTime.value = 0.35;
+      const dFeedback = offlineCtx.createGain();
+      dFeedback.gain.value = effects.delay * 0.6; // Scale feedback
+      
+      const dVol = offlineCtx.createGain();
+      dVol.gain.value = effects.delay * 0.5; // Scale volume
+
+      lastNode.connect(dNode);
+      dNode.connect(dFeedback);
+      dFeedback.connect(dNode);
+      dNode.connect(dVol);
+      dVol.connect(masterBus);
+  }
+
+  // Reverb Path
+  if (effects.reverb > 0.01) {
+      const rNode = offlineCtx.createConvolver();
+      rNode.buffer = createImpulseResponse(offlineCtx, 2.5, 2.5);
+      const rGain = offlineCtx.createGain();
+      rGain.gain.value = effects.reverb * 2.0;
+
+      lastNode.connect(rNode);
+      rNode.connect(rGain);
+      rGain.connect(masterBus);
+  }
+
+  masterBus.connect(offlineCtx.destination);
   source.start();
   
   const renderedBuffer = await offlineCtx.startRendering();
@@ -272,4 +325,35 @@ export function bufferToWav(buffer: AudioBuffer): Blob {
     view.setUint32(pos, data, true);
     pos += 4;
   }
+}
+
+export async function generateBackgroundVideo(
+  prompt: string,
+  aspectRatio: VideoAspectRatio
+): Promise<string> {
+  // Create a new instance to ensure we use the latest API key if updated via UI
+  const aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ar = aspectRatio === VideoAspectRatio.Landscape ? '16:9' : '9:16';
+
+  let operation = await aiClient.models.generateVideos({
+    model: 'veo-3.1-fast-generate-preview',
+    prompt: prompt,
+    config: {
+      numberOfVideos: 1,
+      resolution: '720p',
+      aspectRatio: ar
+    }
+  });
+
+  while (!operation.done) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    operation = await aiClient.operations.getVideosOperation({operation: operation});
+  }
+
+  const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+  if (!videoUri) {
+    throw new Error("Video generation failed. No URI returned.");
+  }
+
+  return `${videoUri}&key=${process.env.API_KEY}`;
 }

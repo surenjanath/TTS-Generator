@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Tone, VoiceName, EmotionVector, PitchPoint } from "../types";
 import { TONES } from "../constants";
 
@@ -76,7 +76,7 @@ export const generateSpeech = async (
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: promptText }] }],
       config: {
-        responseModalities: [Modality.AUDIO],
+        responseModalities: ["AUDIO"] as any, // Using string literal to avoid Enum issues
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: voice },
@@ -86,14 +86,25 @@ export const generateSpeech = async (
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio data returned from Gemini");
+    if (!base64Audio) {
+        // Fallback: check if model returned text refusal/error
+        const textPart = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (textPart) {
+             throw new Error(`Model returned text instead of audio: ${textPart.substring(0, 100)}...`);
+        }
+        throw new Error("No audio data returned from Gemini");
+    }
 
     const audioBytes = decode(base64Audio);
     if (audioContext.state === 'suspended') await audioContext.resume();
 
     return await decodeAudioData(audioBytes, audioContext);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini TTS Error:", error);
+    // Improve error message for 500s
+    if (error.message && error.message.includes("500")) {
+        throw new Error("Gemini Service Error (500). Please try again in a moment or simplify the text.");
+    }
     throw error;
   }
 };
@@ -131,10 +142,8 @@ export async function renderProcessedAudio(
   speed: number,
   pitchPoints: PitchPoint[]
 ): Promise<AudioBuffer> {
-  // Determine duration. 
-  // Pitch automation (detune) affects playback speed in AudioBufferSourceNode.
+  // Determine duration based on pitch automation
   // Lower pitch = Slower speed = Longer duration.
-  // We must calculate the worst-case (longest) duration based on the minimum pitch.
   
   let minPitch = 0;
   if (pitchPoints.length > 0) {
@@ -142,14 +151,13 @@ export async function renderProcessedAudio(
   }
 
   // Effective rate factor at the lowest pitch point
-  // 12 semitones down = 0.5x speed
   const minRateFactor = Math.pow(2, minPitch / 12);
   const minEffectiveSpeed = speed * minRateFactor;
 
   // Calculate worst-case duration
   const estimatedMaxDuration = originalBuffer.duration / minEffectiveSpeed;
   
-  // Add safety buffer (1.5 seconds) to handle resampling artifacts or alignment issues
+  // Add safety buffer (1.5 seconds)
   const renderLength = Math.ceil(estimatedMaxDuration * originalBuffer.sampleRate) + (originalBuffer.sampleRate * 1.5);
   
   const offlineCtx = new OfflineAudioContext(
@@ -165,29 +173,6 @@ export async function renderProcessedAudio(
   // Apply Automation
   if (pitchPoints.length > 0) {
       const sorted = [...pitchPoints].sort((a, b) => a.x - b.x);
-      // Determine the duration of the *source* playback in the timeline of the output?
-      // Actually detune automation time is relative to the output context time.
-      // But map inputs are 0-1 of the *original* buffer content?
-      // Standard practice: Ramp automation times scale with duration?
-      // Here we assume the pitch points (0-1) map to the final played duration? 
-      // OR map to the original buffer position? 
-      // "getPitchAt" logic in App implies it maps to Progress (0-1).
-      // Since speed is variable, mapping 0-1 to absolute time is complex (integral).
-      // However, for linear approximation, we map 0-1 to the estimated max duration for setting ramp targets?
-      // No, AudioParam automation on SourceNode usually maps to the *output* time.
-      // If we assume the automation curve stretches with the audio...
-      
-      // Since calculating exact time map is hard, we approximate:
-      // We map the points to the expected duration at the *base* speed,
-      // and let the SourceNode handle the variable consumption.
-      // Actually, if we set automation at time T, the node reaches that detune at time T.
-      // If that detune makes it slow down, it just takes longer to reach the end of buffer.
-      
-      // We'll map x=1 to `originalBuffer.duration / speed`. 
-      // This matches constant speed behavior. If pitch drops, it drags out, but the automation 
-      // curve itself remains anchored to absolute time. 
-      // This is standard Web Audio behavior.
-      
       const nominalDuration = originalBuffer.duration / speed;
       
       const initialPitch = sorted[0].y * 100;

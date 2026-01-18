@@ -38,27 +38,29 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
 
   const handleMouseDown = (e: React.MouseEvent, id?: string) => {
     if (disabled) return;
+    // Important: Stop propagation so a click on a point doesn't trigger the container's "add point" logic
     e.stopPropagation();
+    e.preventDefault(); // Prevent text selection
     
     if (id) {
       // Start dragging existing point
       setDraggedPointId(id);
     } else {
-      // Add new point
+      // Add new point logic (when clicking background)
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const x = toDataX(e.clientX - rect.left, rect.width);
         const y = toDataY(e.clientY - rect.top, rect.height);
         
+        // Use a more robust ID generation
         const newPoint: PitchPoint = {
-          id: `pt_${Date.now()}`,
+          id: `pt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           x,
           y
         };
         
-        // Add and start dragging immediately
-        const newPoints = [...points, newPoint].sort((a, b) => a.x - b.x);
-        setPoints(newPoints);
+        // Add new point and start dragging it immediately
+        setPoints(prev => [...prev, newPoint].sort((a, b) => a.x - b.x));
         setDraggedPointId(newPoint.id);
       }
     }
@@ -88,7 +90,7 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
   const handleDoubleClick = (e: React.MouseEvent, id: string) => {
      if (disabled) return;
      e.stopPropagation();
-     setPoints(points.filter(p => p.id !== id));
+     setPoints(prev => prev.filter(p => p.id !== id));
   };
 
   useEffect(() => {
@@ -143,7 +145,7 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
          </div>
          <div className="text-[10px] text-gray-500 font-mono flex items-center gap-4">
              <div className="flex items-center gap-1"><Move size={10}/> <span>DRAG</span></div>
-             <div className="flex items-center gap-1"><Plus size={10}/> <span>CLICK TO ADD</span></div>
+             <div className="flex items-center gap-1"><Plus size={10}/> <span>CLICK ADD</span></div>
              <div className="flex items-center gap-1"><Trash2 size={10}/> <span>DBL-CLICK DEL</span></div>
          </div>
       </div>
@@ -192,7 +194,7 @@ const PitchEditor: React.FC<PitchEditorProps> = ({ points, setPoints, currentTim
               >
                  {/* Tooltip */}
                  {(hoveredPointId === p.id || draggedPointId === p.id) && (
-                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 text-qubit-accent text-[10px] px-2 py-1 rounded font-mono whitespace-nowrap pointer-events-none border border-white/10">
+                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 text-qubit-accent text-[10px] px-2 py-1 rounded font-mono whitespace-nowrap pointer-events-none border border-white/10 z-30">
                          {p.y > 0 ? '+' : ''}{p.y.toFixed(1)}st
                      </div>
                  )}

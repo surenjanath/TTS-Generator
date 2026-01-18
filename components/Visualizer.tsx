@@ -34,6 +34,48 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
         previousDataRef.current = new Float32Array(bufferLength).fill(0);
     }
 
+    const drawWaveformLine = (
+      ctx: CanvasRenderingContext2D, 
+      width: number, 
+      height: number, 
+      data: Uint8Array, 
+      color: string, 
+      alpha: number,
+      lineWidth: number
+    ) => {
+      ctx.beginPath();
+      ctx.lineWidth = lineWidth;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha;
+      
+      const sliceWidth = width * 1.0 / data.length;
+      let x = 0;
+
+      // Auto-scaling waveform calculation
+      let maxAmp = 0;
+      for(let i=0; i<data.length; i++) {
+          const v = Math.abs(data[i] - 128);
+          if (v > maxAmp) maxAmp = v;
+      }
+      
+      const zoom = maxAmp < 5 ? 1 : Math.max(1, Math.min(5, 64 / (maxAmp + 1)));
+
+      for(let i = 0; i < data.length; i++) {
+          const v = (data[i] - 128) * zoom;
+          const y = (height / 2) + (v / 128) * (height / 2);
+
+          if(i === 0) {
+              ctx.moveTo(x, y);
+          } else {
+              ctx.lineTo(x, y);
+          }
+          x += sliceWidth;
+      }
+
+      ctx.stroke();
+      ctx.globalAlpha = 1.0; // Reset alpha
+    };
+
     const draw = () => {
       // Handle High DPI scaling
       const dpr = window.devicePixelRatio || 1;
@@ -52,7 +94,14 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
       ctx.fillStyle = 'rgba(11, 12, 21, 0.2)'; 
       ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+      // Always fetch time domain data for the ghost effect or main view
+      analyser.getByteTimeDomainData(timeArray);
+
       if (mode === VisualizationMode.Frequency) {
+        // 1. Draw Ghost Waveform (Background)
+        drawWaveformLine(ctx, WIDTH, HEIGHT, timeArray, activeColor, 0.15, 1);
+
+        // 2. Draw Frequency Bars (Foreground)
         analyser.getByteFrequencyData(dataArray);
         
         // Calculate Audio Energy (Volume) for Auto-Gain
@@ -61,17 +110,10 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
             sum += dataArray[i];
         }
         const average = sum / bufferLength;
-        
-        // Smooth the volume reading
         smoothedVolumeRef.current += (average - smoothedVolumeRef.current) * 0.1;
         
-        // Calculate Dynamic Boost
-        // If volume is low, we want to BOOST it, not mute it.
-        // If average is near 0, boost is high (e.g. 5x). If average is 128, boost is 1x.
         let dynamicBoost = 1.0;
         if (smoothedVolumeRef.current > 0.1) {
-             // Target average visible height ~30%
-             // If average is 10, we want to boost by ~3x
              dynamicBoost = Math.max(1.0, Math.min(5.0, 40 / (smoothedVolumeRef.current + 1)));
         }
 
@@ -79,30 +121,24 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-          // Get value and apply dynamic boost
           const rawValue = dataArray[i];
           const boostedValue = Math.min(255, rawValue * dynamicBoost);
           
-          // Temporal Smoothing
           const prev = previousDataRef.current![i];
-          // Attack is fast (0.5), decay is slow (0.15)
           const smoothingFactor = boostedValue > prev ? 0.5 : 0.15; 
           const smoothValue = prev + (boostedValue - prev) * smoothingFactor;
           
           previousDataRef.current![i] = smoothValue;
 
-          // Draw
           const barHeight = (smoothValue / 255) * HEIGHT;
           
-          // Create gradient based on tone color
           const gradient = ctx.createLinearGradient(0, HEIGHT, 0, HEIGHT - barHeight);
-          gradient.addColorStop(0, `${activeColor}40`); // Transparent at bottom
+          gradient.addColorStop(0, `${activeColor}40`);
           gradient.addColorStop(0.5, activeColor);
-          gradient.addColorStop(1, '#ffffff'); // White tip
+          gradient.addColorStop(1, '#ffffff');
 
           ctx.fillStyle = gradient;
           
-          // Draw rounded rect top
           if (barHeight > 1) {
               ctx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
           }
@@ -110,44 +146,10 @@ const Visualizer: React.FC<VisualizerProps> = ({ analyser, isPlaying, mode, tone
           x += barWidth + 1;
         }
       } else {
-        // Waveform Logic
-        analyser.getByteTimeDomainData(timeArray);
-        
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = activeColor;
+        // Waveform Mode - Draw High Contrast Waveform
         ctx.shadowBlur = 4;
         ctx.shadowColor = activeColor;
-        
-        ctx.beginPath();
-        
-        const sliceWidth = WIDTH * 1.0 / bufferLength;
-        let x = 0;
-
-        // Auto-scaling waveform
-        // Calculate peak amplitude
-        let maxAmp = 0;
-        for(let i=0; i<bufferLength; i++) {
-            const v = Math.abs(timeArray[i] - 128);
-            if (v > maxAmp) maxAmp = v;
-        }
-        
-        // If signal is weak, zoom in (limit zoom to 5x)
-        const zoom = maxAmp < 5 ? 1 : Math.max(1, Math.min(5, 64 / (maxAmp + 1)));
-
-        for(let i = 0; i < bufferLength; i++) {
-            const v = (timeArray[i] - 128) * zoom; // Center at 0 and zoom
-            const y = (HEIGHT / 2) + (v / 128) * (HEIGHT / 2); // Map to screen
-
-            if(i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-
-            x += sliceWidth;
-        }
-
-        ctx.stroke();
+        drawWaveformLine(ctx, WIDTH, HEIGHT, timeArray, activeColor, 1.0, 2);
         ctx.shadowBlur = 0;
       }
 

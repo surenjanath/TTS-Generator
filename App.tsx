@@ -368,8 +368,20 @@ function App() {
                             <span className="text-xs font-mono font-bold tracking-widest text-gray-400 uppercase">Signal Visualizer</span>
                         </div>
                         <div className="flex bg-qubit-900 rounded-lg p-1 border border-white/10">
-                            <button onClick={() => setVisMode(VisualizationMode.Waveform)} className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Waveform ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}><Waves size={14} /></button>
-                            <button onClick={() => setVisMode(VisualizationMode.Frequency)} className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Frequency ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}><BarChart2 size={14} /></button>
+                            <button 
+                                onClick={() => setVisMode(VisualizationMode.Waveform)} 
+                                title="Waveform Mode"
+                                className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Waveform ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}
+                            >
+                                <Waves size={14} />
+                            </button>
+                            <button 
+                                onClick={() => setVisMode(VisualizationMode.Frequency)} 
+                                title="Frequency Mode"
+                                className={`p-1.5 rounded transition-all ${visMode === VisualizationMode.Frequency ? 'bg-qubit-800 text-qubit-accent shadow-sm' : 'text-gray-600 hover:text-gray-300'}`}
+                            >
+                                <BarChart2 size={14} />
+                            </button>
                         </div>
                       </div>
                       {isPlaying && (
